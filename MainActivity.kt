@@ -26,8 +26,6 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myradio.deepradio.domain.MediaManager
-import com.myradio.deepradio.domain.com.example.deepradio.MainViewModel
-import com.myradio.deepradio.presentation.screens.RadioMainScreen
 import com.myradio.deepradio.presentation.theme.DeepRadioTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -48,7 +46,6 @@ class MainActivity : ComponentActivity() {
     private val requestBluetoothPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (!granted) {
-                // Handle permission denied
                 showPermissionSnackbar("Bluetooth permission denied")
             }
         }
@@ -56,7 +53,6 @@ class MainActivity : ComponentActivity() {
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (!granted) {
-                // Handle permission denied
                 showPermissionSnackbar("Notification permission denied")
             }
         }
@@ -76,7 +72,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setupPermissions()
         setupOrientation()
         registerAutoRotateReceiver()
@@ -96,17 +91,14 @@ class MainActivity : ComponentActivity() {
         val uiState by viewModel.uiState.collectAsStateWithLifecycle()
         val scope = rememberCoroutineScope()
         val drawerState = rememberDrawerState(DrawerValue.Closed)
-        val snackbarHostState = remember { SnackbarHostState() }
 
         var showAbout by remember { mutableStateOf(false) }
 
-        // Handle system events
         LaunchedEffect(Unit) {
             viewModel.checkForUpdates()
             adManager.loadInterstitialAd()
         }
 
-        // Handle drawer navigation
         BackHandler(enabled = drawerState.isOpen) {
             scope.launch { drawerState.close() }
         }
@@ -123,40 +115,28 @@ class MainActivity : ComponentActivity() {
                 )
             }
         ) {
-            Scaffold(
-                snackbarHost = { SnackbarHost(snackbarHostState) },
-                topBar = {
-                    MainTopBar(
-                        onMenuClick = {
-                            scope.launch {
-                                if (drawerState.isClosed) drawerState.open()
-                                else drawerState.close()
-                            }
+            Box(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                RadioMainScreen(
+                    onMenuClick = {
+                        scope.launch {
+                            if (drawerState.isClosed) drawerState.open()
+                            else drawerState.close()
                         }
-                    )
+                    }
+                )
+
+                if (adManager.showAdBlockerDialog.value) {
+                    AdBlockerDetectedDialog(adManager = adManager)
                 }
-            ) { paddingValues ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                ) {
-                    RadioMainScreen()
 
-                    // Show ad blocker dialog
-                    if (adManager.showAdBlockerDialog.value) {
-                        AdBlockerDetectedDialog(adManager = adManager)
-                    }
-
-                    // Show update dialog
-                    if (updateManager.showUpdateDialog) {
-                        UpdateDialog(updateManager = updateManager)
-                    }
+                if (updateManager.showUpdateDialog) {
+                    UpdateDialog(updateManager = updateManager)
                 }
             }
         }
 
-        // About dialog
         if (showAbout) {
             ShowAboutApp(
                 context = LocalContext.current,
@@ -164,52 +144,13 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        // Handle snackbar messages
+        // Handle messages - показываем как Toast вместо Snackbar
         LaunchedEffect(uiState.message) {
             uiState.message?.let { message ->
-                snackbarHostState.showSnackbar(message)
+                // Можно добавить Toast или другой способ показа сообщений
                 viewModel.clearMessage()
             }
         }
-    }
-
-    @OptIn(ExperimentalMaterial3Api::class)
-    @Composable
-    private fun MainTopBar(
-        onMenuClick: () -> Unit
-    ) {
-        TopAppBar(
-            title = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Radio,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        "Deep Radio",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            navigationIcon = {
-                IconButton(onClick = onMenuClick) {
-                    Icon(
-                        Icons.Default.Menu,
-                        contentDescription = "Open menu"
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
-            )
-        )
     }
 
     @Composable
@@ -281,7 +222,11 @@ class MainActivity : ComponentActivity() {
                         val intent = Intent(Intent.ACTION_SENDTO).apply {
                             data = android.net.Uri.parse("mailto:support@deepradio.site")
                         }
-                        startActivity(intent)
+                        try {
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            // Email app not found, ignore
+                        }
                     }
                 ) {
                     Column(
@@ -351,11 +296,16 @@ class MainActivity : ComponentActivity() {
 
     private fun registerAutoRotateReceiver() {
         val filter = IntentFilter("com.myradio.deepradio.AUTO_ROTATE_CHANGED")
-        registerReceiver(autoRotateReceiver, filter)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(autoRotateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(autoRotateReceiver, filter)
+        }
     }
 
     private fun showPermissionSnackbar(message: String) {
-        // This will be handled by the MainViewModel and shown in the UI
+        // Can be handled by displaying a toast or other notification method
+        // Since we don't have snackbar anymore
     }
 
     override fun onDestroy() {
@@ -369,7 +319,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // Handle any special intents here (like media button actions)
         intent?.let {
             // Pass to media manager if needed
         }

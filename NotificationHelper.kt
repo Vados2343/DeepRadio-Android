@@ -24,7 +24,7 @@ object NotificationHelper {
         val notification = androidx.core.app.NotificationCompat.Builder(context, "network_channel")
             .setContentTitle("Deep Radio - Сеть")
             .setContentText(message)
-            .setSmallIcon(R.drawable.logo)
+            .setSmallIcon(R.drawable.logo_16x16)
             .setAutoCancel(true)
             .setTimeoutAfter(8000) // Автоматически скрыть через 8 секунд
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)

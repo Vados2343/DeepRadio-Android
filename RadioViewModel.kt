@@ -1,7 +1,9 @@
 package com.myradio.deepradio.presentation
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.speech.RecognizerIntent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,7 +11,14 @@ import com.myradio.deepradio.RadioStation
 import com.myradio.deepradio.domain.MediaManager
 import com.myradio.deepradio.domain.StationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -148,9 +157,13 @@ class RadioViewModel @Inject constructor(
                 is VoiceCommand.Play -> {
                     mediaManager.play()
                 }
+                else -> {
+                    // Ничего не делать или логировать неизвестную команду
+                }
             }
         }
     }
+
 
     fun dismissVoiceResult() {
         _showVoiceResult.value = null
@@ -164,7 +177,7 @@ class RadioViewModel @Inject constructor(
 
 // Google Assistant Handler
 class GoogleAssistantHandler @Inject constructor(
-    private val context: android.content.Context
+    @ApplicationContext private val context: android.content.Context
 ) {
     private var voiceCommandCallback: ((VoiceCommand) -> Unit)? = null
     private val voiceReceiver = VoiceCommandReceiver()
@@ -178,7 +191,11 @@ class GoogleAssistantHandler @Inject constructor(
             addAction("android.media.action.MEDIA_PLAY_FROM_SEARCH")
         }
 
-        context.registerReceiver(voiceReceiver, filter)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(voiceReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(voiceReceiver, filter)
+        }
     }
 
     fun unregister() {

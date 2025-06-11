@@ -1,6 +1,7 @@
 package com.myradio.deepradio
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -35,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.myradio.deepradio.domain.MediaManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -50,11 +53,11 @@ import javax.inject.Singleton
 
 @Singleton
 class UpdateManager @Inject constructor(
-    private val activity: Activity,
+    @ApplicationContext private val context: Context,
     private val mediaManager: MediaManager
 ) {
     val currentVersion: String
-        get() = activity.resources.getString(R.string.version).removePrefix("Версия: ")
+        get() = context.resources.getString(R.string.version).removePrefix("Версия: ")
 
     private val updateUrl = "https://raw.githubusercontent.com/Vados2343/UpdateManager/main/version"
     private val playStoreUrl = "https://play.google.com/store/apps/details?id=com.example.radioplayerbyvados2343"
@@ -92,12 +95,12 @@ class UpdateManager @Inject constructor(
         showUpdateDialog = false
     }
 
-    fun openPlayStore() {
+    fun openPlayStore(activity: Activity) {
         activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(playStoreUrl)))
         showUpdateDialog = false
     }
 
-    fun closeApp() {
+    fun closeApp(activity: Activity) {
         mediaManager.stop()
         showUpdateDialog = false
         activity.finishAffinity()
@@ -110,13 +113,14 @@ fun UpdateDialog(updateManager: UpdateManager) {
 
     var countdown by remember { mutableStateOf(30) }
     val scope = rememberCoroutineScope()
+    val activity = LocalContext.current as Activity
 
     LaunchedEffect(Unit) {
         while (countdown > 0) {
             delay(1000)
             countdown--
         }
-        updateManager.closeApp()
+        updateManager.closeApp(activity)
     }
 
     Dialog(
@@ -215,7 +219,6 @@ fun UpdateDialog(updateManager: UpdateManager) {
 
                 Spacer(Modifier.height(16.dp))
 
-                // Progress indicator
                 LinearProgressIndicator(
                     progress = { (30 - countdown) / 30f },
                     modifier = Modifier
@@ -232,14 +235,14 @@ fun UpdateDialog(updateManager: UpdateManager) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     OutlinedButton(
-                        onClick = { updateManager.closeApp() },
+                        onClick = { updateManager.closeApp(activity) },
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Закрыть")
                     }
 
                     Button(
-                        onClick = { updateManager.openPlayStore() },
+                        onClick = { updateManager.openPlayStore(activity) },
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Обновить")

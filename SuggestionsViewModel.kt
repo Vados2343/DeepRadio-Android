@@ -3,12 +3,19 @@ package com.myradio.deepradio
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class SuggestionsViewModel(private val context: Context) : ViewModel() {
+@HiltViewModel
+class SuggestionsViewModel @Inject constructor(
+    @ApplicationContext private val context: Context
+) : ViewModel() {
+
     private val _suggestionsState = MutableStateFlow<SuggestionsState>(SuggestionsState.Idle)
     val suggestionsState: StateFlow<SuggestionsState> = _suggestionsState
 
@@ -37,7 +44,9 @@ class SuggestionsViewModel(private val context: Context) : ViewModel() {
                     putExtra(android.content.Intent.EXTRA_EMAIL, arrayOf("support@deepradio.site"))
                     putExtra(android.content.Intent.EXTRA_SUBJECT, "Предложение")
                     putExtra(android.content.Intent.EXTRA_TEXT, emailContent)
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
+
                 context.startActivity(android.content.Intent.createChooser(emailIntent, "Отправить email..."))
                 _suggestionsState.value = SuggestionsState.Success
             } catch (e: Exception) {

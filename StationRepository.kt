@@ -1,7 +1,9 @@
+// StationRepository.kt
 package com.myradio.deepradio.domain
 
 import android.content.Context
 import com.myradio.deepradio.RadioStation
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -16,7 +18,7 @@ import javax.inject.Singleton
 
 @Singleton
 class StationRepository @Inject constructor(
-    private val context: Context
+    @ApplicationContext private val context: Context
 ) {
     // «сырая» StateFlow без учёта избранного
     private val _stations = MutableStateFlow<List<RadioStation>>(emptyList())
@@ -44,25 +46,22 @@ class StationRepository @Inject constructor(
     }
 
     fun toggleFavorite(station: RadioStation) {
-        val current = _favorites.value.toMutableSet()
-        if (!current.add(station.name)) {
-            current.remove(station.name)
+        val current = _favorites.value.toMutableSet().apply {
+            if (!add(station.name)) remove(station.name)
         }
         _favorites.value = current
-
         context.getSharedPreferences("radio_prefs", Context.MODE_PRIVATE)
             .edit()
             .putStringSet("favorites", current)
             .apply()
 
-        // Обновляем поток станций с новым флагом isFavorite
-        _stations.value = _stations.value.map { item ->
-            item.copy(isFavorite = current.contains(item.name))
+        _stations.value = _stations.value.map {
+            it.copy(isFavorite = current.contains(it.name))
         }
     }
 
     /**
-     * Основной метод для получения всех станций со статусом избранного.
+     * Возвращает StateFlow всех станций с признаком избранного.
      */
     fun getAllStations(): StateFlow<List<RadioStation>> = combine(
         stations, favorites
@@ -77,31 +76,24 @@ class StationRepository @Inject constructor(
     /**
      * Фильтрация по категории и поисковому запросу.
      */
-    fun getFilteredStations(category: String?, searchQuery: String): Flow<List<RadioStation>> {
-        return combine(getAllStations(), favorites) { list, favs ->
+    fun getFilteredStations(category: String?, searchQuery: String): Flow<List<RadioStation>> =
+        combine(getAllStations(), favorites) { list, favs ->
             list.filter { station ->
-                val matchesCategory = category == null
+                val byCategory = category == null
                         || category == "All"
                         || (category == "Favorites" && favs.contains(station.name))
                         || station.categories.contains(category)
-                val matchesSearch = searchQuery.isEmpty()
+                val bySearch = searchQuery.isEmpty()
                         || station.name.contains(searchQuery, ignoreCase = true)
-                matchesCategory && matchesSearch
+                byCategory && bySearch
             }.sortedByDescending { it.isFavorite }
         }
-    }
 
-    /**
-     * Добавляет новую кастомную станцию в список.
-     */
     fun addCustomStation(station: RadioStation) {
         _stations.value = _stations.value + station
         updateCategories()
     }
 
-    /**
-     * Поиск станции по URL потока.
-     */
     fun getStationByUrl(url: String): RadioStation? =
         _stations.value.find { it.streamUrl == url }
 

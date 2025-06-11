@@ -1,8 +1,7 @@
-package com.myradio.deepradio.domain.com.example.deepradio
+package com.myradio.deepradio
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.myradio.deepradio.UpdateManager
 import com.myradio.deepradio.domain.MediaManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow

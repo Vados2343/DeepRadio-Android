@@ -18,7 +18,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.support.v4.media.MediaBrowserCompat
-import android.support.v4.media.MediaDescriptionCompat
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -399,27 +398,17 @@ class RadioPlaybackService : MediaBrowserServiceCompat() {
         parentId: String,
         result: Result<MutableList<MediaBrowserCompat.MediaItem>>
     ) {
-        if (parentId != ROOT_ID) {
+        if (parentId != "root") {
             result.sendResult(null)
             return
         }
 
-        serviceScope.launch {
-            try {
-                val stations = mediaManager.stationRepository.getAllStations().value
-                val items = stations.map { station ->
-                    val desc = MediaDescriptionCompat.Builder()
-                        .setMediaId(station.streamUrl)
-                        .setTitle(station.name)
-                        .setSubtitle(station.categories.joinToString(", "))
-                        .build()
-                    MediaBrowserCompat.MediaItem(desc, MediaBrowserCompat.MediaItem.FLAG_PLAYABLE)
-                }
-                result.sendResult(items.toMutableList())
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to load children", e)
-                result.sendResult(mutableListOf())
-            }
+        try {
+            val items = mediaManager.getMediaItems().toMutableList()
+            result.sendResult(items)
+        } catch (e: Exception) {
+            Log.e("RadioPlaybackService", "Failed to load children", e)
+            result.sendResult(mutableListOf())
         }
     }
 }

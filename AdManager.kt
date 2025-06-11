@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -54,11 +55,11 @@ import com.google.android.gms.ads.initialization.InitializationStatus
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.myradio.deepradio.domain.MediaManager
+import dagger.hilt.android.scopes.ActivityScoped
 import kotlinx.coroutines.delay
 import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
+@ActivityScoped
 class AdManager @Inject constructor(
     private val activity: Activity,
     private val mediaManager: MediaManager
@@ -84,7 +85,7 @@ class AdManager @Inject constructor(
     }
 
     fun loadInterstitialAd() {
-        if (System.currentTimeMillis() - lastAdTime < 3600000) { // 1 час
+        if (System.currentTimeMillis() - lastAdTime < 3600000) {
             return
         }
 
@@ -141,9 +142,9 @@ class AdManager @Inject constructor(
     }
 
     private fun scheduleAdBlockerDetected() {
-        if (!wasAdLoadedAndShown) {
-            handler.postDelayed(adBlockerDetectedRunnable, 3000)
-        }
+      //  if (!wasAdLoadedAndShown) {
+      //      handler.postDelayed(adBlockerDetectedRunnable, 3000)
+     //   }
     }
 
     private val adBlockerDetectedRunnable = Runnable {
@@ -165,6 +166,7 @@ fun AdBlockerDetectedDialog(
     adManager: AdManager
 ) {
     var countdown by remember { mutableStateOf(30) }
+    val activity = LocalContext.current as Activity
 
     LaunchedEffect(key1 = true) {
         while (countdown > 0) {
@@ -175,7 +177,7 @@ fun AdBlockerDetectedDialog(
     }
 
     Dialog(
-        onDismissRequest = { /* Не позволяем закрыть */ },
+        onDismissRequest = { },
         properties = DialogProperties(
             dismissOnBackPress = false,
             dismissOnClickOutside = false,
@@ -198,7 +200,6 @@ fun AdBlockerDetectedDialog(
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Animated icon
                 val infiniteTransition = rememberInfiniteTransition(label = "scale")
                 val scale by infiniteTransition.animateFloat(
                     initialValue = 0.9f,
@@ -258,7 +259,6 @@ fun AdBlockerDetectedDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Progress bar
                 LinearProgressIndicator(
                     progress = { countdown / 30f },
                     modifier = Modifier

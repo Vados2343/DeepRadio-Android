@@ -7,8 +7,9 @@ data class RadioStation(
     val apiUrl: String,
     val categories: List<String>,
     var isFavorite: Boolean = false,
-    val originalIndex: Int
+    val originalIndex: Int,
 ) {
+
     companion object {
         fun createSampleStations() = listOf(
             RadioStation("Hit FM Українські хіти", "https://online.hitfm.ua/HitFM_Ukr_HD", R.drawable.icon1, "https://o.tavrmedia.ua/hitu", listOf("Pop", "Ukr"), false, 0),

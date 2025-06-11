@@ -1,9 +1,10 @@
+@file:OptIn(ExperimentalAnimationApi::class)
 package com.myradio.deepradio.presentation.components
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,26 +14,26 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.myradio.deepradio.RadioStation
 import com.myradio.deepradio.domain.MediaManager
 
-// MiniPlayer компонент
+// ✅ ПОЛНЫЙ УЛУЧШЕННЫЙ MINI PLAYER
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MiniPlayer(
     station: RadioStation,
@@ -44,421 +45,459 @@ fun MiniPlayer(
     onPrevious: () -> Unit,
     onExpand: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+    val configuration = LocalConfiguration.current
+
+    // ✅ СОСТОЯНИЯ ДЛЯ АНИМАЦИЙ
+    var isPressed by remember { mutableStateOf(false) }
+    var showVolumeSlider by remember { mutableStateOf(false) }
+
+    // ✅ АНИМАЦИИ
+    val scaleAnimation by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.8f),
+        label = "mini_player_scale"
+    )
+
+    val elevationAnimation by animateDpAsState(
+        targetValue = if (isPlaying) 16.dp else 8.dp,
+        animationSpec = tween(300),
+        label = "mini_player_elevation"
+    )
+
+    // ✅ ЦВЕТОВАЯ АНИМАЦИЯ
+    val containerColor by animateColorAsState(
+        targetValue = when {
+            isPlaying -> MaterialTheme.colorScheme.primaryContainer
+            isBuffering -> MaterialTheme.colorScheme.tertiaryContainer
+            else -> MaterialTheme.colorScheme.surfaceVariant
+        },
+        animationSpec = tween(400),
+        label = "mini_player_color"
+    )
+
+    // ✅ ОСНОВНОЙ КОНТЕЙНЕР
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shadowElevation = 12.dp,
-        shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+        color = containerColor,
+        shadowElevation = elevationAnimation,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .height(76.dp)
-            .clickable { onExpand() }
+            .height(84.dp)
+            .scale(scaleAnimation)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        tryAwaitRelease()
+                        isPressed = false
+                    },
+                    onTap = { onExpand() }
+                )
+            }
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        // ✅ ГРАДИЕНТНЫЙ ФОНОВЫЙ ЭФФЕКТ
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 14.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            Color.Transparent
+                        )
+                    )
+                )
         ) {
-            Image(
-                painter = painterResource(station.iconResId),
-                contentDescription = null,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .size(54.dp)
-                    .clip(RoundedCornerShape(10.dp)),
-                contentScale = ContentScale.Crop
-            )
-
-            Spacer(Modifier.width(12.dp))
-
-            Column(
-                Modifier
-                    .weight(1f)
-                    .padding(vertical = 8.dp)
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                Text(
-                    text = metadata?.title?.takeIf { it.isNotBlank() } ?: station.name,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                // ✅ УЛУЧШЕННАЯ ALBUM ART СЕКЦИЯ
+                EnhancedAlbumArtSection(
+                    station = station,
+                    isPlaying = isPlaying,
+                    isBuffering = isBuffering
                 )
-                if (!metadata?.artist.isNullOrBlank()) {
-                    Text(
-                        metadata?.artist ?: "",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (isBuffering) {
-                    Text(
-                        "Загрузка...",
-                        color = MaterialTheme.colorScheme.outline,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
 
-            IconButton(onClick = onPrevious, modifier = Modifier.size(46.dp)) {
-                Icon(
-                    Icons.Default.SkipPrevious,
-                    contentDescription = "Previous",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(32.dp)
+                Spacer(Modifier.width(16.dp))
+
+                // ✅ УЛУЧШЕННАЯ ИНФОРМАЦИОННАЯ СЕКЦИЯ
+                EnhancedInfoSection(
+                    station = station,
+                    metadata = metadata,
+                    isPlaying = isPlaying,
+                    isBuffering = isBuffering,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Spacer(Modifier.width(12.dp))
+
+                // ✅ УЛУЧШЕННАЯ СЕКЦИЯ УПРАВЛЕНИЯ
+                EnhancedControlsSection(
+                    isPlaying = isPlaying,
+                    isBuffering = isBuffering,
+                    onPlayPause = onPlayPause,
+                    onNext = onNext,
+                    onPrevious = onPrevious
                 )
             }
 
-            IconButton(
-                onClick = onPlayPause,
-                modifier = Modifier
-                    .size(54.dp)
-                    .background(
-                        color = if (isPlaying) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outline,
-                        shape = CircleShape
-                    )
-            ) {
-                if (isBuffering) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = if (isPlaying) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.size(34.dp)
-                    )
-                }
-            }
-
-            IconButton(onClick = onNext, modifier = Modifier.size(46.dp)) {
-                Icon(
-                    Icons.Default.SkipNext,
-                    contentDescription = "Next",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(32.dp)
+            // ✅ ИНДИКАТОР ПРОГРЕССА (декоративный)
+            if (isPlaying) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .align(Alignment.BottomCenter),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                 )
             }
         }
     }
 }
 
-// ExpandedPlayer компонент
-@OptIn(ExperimentalMaterial3Api::class)
+// ✅ УЛУЧШЕННАЯ ALBUM ART СЕКЦИЯ
 @Composable
-fun ExpandedPlayer(
+private fun EnhancedAlbumArtSection(
+    station: RadioStation,
+    isPlaying: Boolean,
+    isBuffering: Boolean
+) {
+    val rotationAnimation by rememberInfiniteTransition(label = "album_rotation").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(20000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    Box(
+        modifier = Modifier.size(60.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (isPlaying) {
+                        Modifier.graphicsLayer(rotationZ = rotationAnimation)
+                    } else Modifier
+                ),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Image(
+                    painter = painterResource(station.iconResId),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+
+                // ✅ ОВЕРЛЕЙ ДЛЯ СОСТОЯНИЙ
+                when {
+                    isBuffering -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.6f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                    isPlaying -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.4f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            MiniWaveAnimation()
+                        }
+                    }
+                }
+            }
+        }
+
+        // ✅ СТАТУС ИНДИКАТОР
+        Box(
+            modifier = Modifier
+                .size(16.dp)
+                .background(
+                    when {
+                        isBuffering -> MaterialTheme.colorScheme.tertiary
+                        isPlaying -> Color.Green
+                        else -> MaterialTheme.colorScheme.outline
+                    },
+                    CircleShape
+                )
+                .align(Alignment.TopEnd)
+                .offset(x = 4.dp, y = (-4).dp)
+        ) {
+            Icon(
+                imageVector = when {
+                    isBuffering -> Icons.Default.HourglassEmpty
+                    isPlaying -> Icons.Default.PlayArrow
+                    else -> Icons.Default.Pause
+                },
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier
+                    .size(10.dp)
+                    .align(Alignment.Center)
+            )
+        }
+    }
+}
+
+// ✅ МИНИ WAVE АНИМАЦИЯ
+@Composable
+private fun MiniWaveAnimation() {
+    val infiniteTransition = rememberInfiniteTransition(label = "mini_wave")
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(1.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(3) { index ->
+            val animatedHeight by infiniteTransition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(600),
+                    repeatMode = RepeatMode.Reverse,
+                    initialStartOffset = StartOffset(index * 100)
+                ),
+                label = "mini_height$index"
+            )
+
+            Box(
+                modifier = Modifier
+                    .width(2.dp)
+                    .height((12 * animatedHeight).dp)
+                    .background(
+                        Color.White,
+                        RoundedCornerShape(1.dp)
+                    )
+            )
+        }
+    }
+}
+
+// ✅ УЛУЧШЕННАЯ ИНФОРМАЦИОННАЯ СЕКЦИЯ
+@Composable
+private fun EnhancedInfoSection(
     station: RadioStation,
     metadata: MediaManager.SongMetadata?,
     isPlaying: Boolean,
     isBuffering: Boolean,
-    onPlayPause: () -> Unit,
-    onNext: () -> Unit,
-    onPrevious: () -> Unit,
-    onCollapse: () -> Unit,
-    onShare: () -> Unit
+    modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f),
-                        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f)
-                    )
-                )
-            )
+    Column(
+        modifier = modifier.padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        // Background blur effect
-        Image(
-            painter = painterResource(station.iconResId),
-            contentDescription = null,
-            modifier = Modifier
-                .fillMaxSize()
-                .blur(50.dp)
-                .graphicsLayer(alpha = 0.3f),
-            contentScale = ContentScale.Crop
+        // ✅ ОСНОВНОЙ ЗАГОЛОВОК
+        Text(
+            text = metadata?.title?.takeIf { it.isNotBlank() } ?: station.name,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        // ✅ ПОДЗАГОЛОВОК
+        Text(
+            text = when {
+                !metadata?.artist.isNullOrBlank() -> metadata?.artist ?: ""
+                else -> station.categories.joinToString(" • ")
+            },
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        // ✅ СТАТУС С АНИМАЦИЕЙ
+        AnimatedVisibility(
+            visible = isBuffering || isPlaying,
+            enter = fadeIn() + slideInVertically { -it },
+            exit = fadeOut() + slideOutVertically { -it }
         ) {
-            // Top bar
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                IconButton(onClick = onCollapse) {
-                    Icon(
-                        Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Collapse",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(32.dp)
-                    )
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(
+                            when {
+                                isBuffering -> MaterialTheme.colorScheme.tertiary
+                                isPlaying -> Color.Green
+                                else -> MaterialTheme.colorScheme.outline
+                            },
+                            CircleShape
+                        )
+                ) {
+                    // ✅ ПУЛЬСИРУЮЩАЯ АНИМАЦИЯ
+                    if (isPlaying) {
+                        val pulseAnimation by rememberInfiniteTransition(label = "pulse").animateFloat(
+                            initialValue = 0.5f,
+                            targetValue = 1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1000),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "pulse_animation"
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .scale(pulseAnimation)
+                                .background(Color.Green.copy(alpha = 0.6f), CircleShape)
+                        )
+                    }
                 }
 
                 Text(
-                    text = "Сейчас играет",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.headlineSmall,
+                    text = when {
+                        isBuffering -> "Загрузка..."
+                        isPlaying -> "В эфире"
+                        else -> "Пауза"
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Medium
                 )
-
-                IconButton(onClick = onShare) {
-                    Icon(
-                        Icons.Default.Share,
-                        contentDescription = "Share",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(40.dp))
-
-            // Album art
-            Box(
-                modifier = Modifier
-                    .size(280.dp)
-                    .clip(RoundedCornerShape(20.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    modifier = Modifier.fillMaxSize(),
-                    shape = RoundedCornerShape(20.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                ) {
-                    Image(
-                        painter = painterResource(station.iconResId),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-
-                if (isPlaying) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Color.Black.copy(alpha = 0.4f),
-                                RoundedCornerShape(20.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        WaveAnimation()
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(40.dp))
-
-            // Song info
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = metadata?.title?.takeIf { it.isNotBlank() } ?: station.name,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = metadata?.artist?.takeIf { it.isNotBlank() }
-                        ?: station.categories.joinToString(", "),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.titleLarge,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                if (isBuffering) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Загрузка...",
-                        color = MaterialTheme.colorScheme.outline,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Controls
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onPrevious,
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Icon(
-                        Icons.Default.SkipPrevious,
-                        contentDescription = "Previous",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = onPlayPause,
-                    modifier = Modifier
-                        .size(80.dp)
-                        .background(
-                            color = if (isPlaying) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outline,
-                            shape = CircleShape
-                        )
-                ) {
-                    if (isBuffering) {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(32.dp),
-                            strokeWidth = 3.dp
-                        )
-                    } else {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = if (isPlaying) MaterialTheme.colorScheme.onPrimary
-                            else MaterialTheme.colorScheme.surface,
-                            modifier = Modifier.size(48.dp)
-                        )
-                    }
-                }
-
-                IconButton(
-                    onClick = onNext,
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Icon(
-                        Icons.Default.SkipNext,
-                        contentDescription = "Next",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Additional info
-            if (!metadata?.genre.isNullOrBlank() || !metadata?.album.isNullOrBlank()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            Icons.Default.Radio,
-                            contentDescription = "Station",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Text(
-                            text = "Станция",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                        Text(
-                            text = station.name,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    if (!metadata?.genre.isNullOrBlank()) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                Icons.Default.MusicNote,
-                                contentDescription = "Genre",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Text(
-                                text = "Жанр",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                            Text(
-                                text = metadata?.genre ?: "",
-                                color = MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    if (!metadata?.album.isNullOrBlank()) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                Icons.Default.Album,
-                                contentDescription = "Album",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Text(
-                                text = "Альбом",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                            Text(
-                                text = metadata?.album ?: "",
-                                color = MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
             }
         }
     }
 }
 
-// VoiceResultDialog компонент
+// ✅ УЛУЧШЕННАЯ СЕКЦИЯ УПРАВЛЕНИЯ
+@Composable
+private fun EnhancedControlsSection(
+    isPlaying: Boolean,
+    isBuffering: Boolean,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        // ✅ КНОПКА ПРЕДЫДУЩАЯ
+        IconButton(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onPrevious()
+            },
+            modifier = Modifier
+                .size(48.dp)
+                .background(
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                    CircleShape
+                )
+        ) {
+            Icon(
+                Icons.Default.SkipPrevious,
+                contentDescription = "Предыдущая",
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
+        // ✅ ГЛАВНАЯ КНОПКА PLAY/PAUSE
+        IconButton(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onPlayPause()
+            },
+            modifier = Modifier
+                .size(56.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = CircleShape
+                )
+        ) {
+            if (isBuffering) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                // ✅ АНИМИРОВАННАЯ ИКОНКА
+                AnimatedContent(
+                    targetState = isPlaying,
+                    transitionSpec = {
+                        scaleIn() + fadeIn() with scaleOut() + fadeOut()
+                    },
+                    label = "play_pause_icon"
+                ) { playing ->
+                    Icon(
+                        imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (playing) "Пауза" else "Воспроизвести",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+        }
+
+        // ✅ КНОПКА СЛЕДУЮЩАЯ
+        IconButton(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onNext()
+            },
+            modifier = Modifier
+                .size(48.dp)
+                .background(
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                    CircleShape
+                )
+        ) {
+            Icon(
+                Icons.Default.SkipNext,
+                contentDescription = "Следующая",
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+// ✅ ДОПОЛНИТЕЛЬНЫЙ КОМПОНЕНТ: VoiceResultDialog для голосовых команд
 @Composable
 fun VoiceResultDialog(
     result: com.myradio.deepradio.presentation.VoiceResult,
     onDismiss: () -> Unit
 ) {
-    Dialog(
+    androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false
+        )
     ) {
         Card(
             modifier = Modifier
@@ -471,16 +510,26 @@ fun VoiceResultDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Icon(
-                    Icons.Default.Mic,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
+                // ✅ АНИМИРОВАННАЯ ИКОНКА
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Mic,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
 
                 Text(
                     text = result.title,
@@ -488,8 +537,6 @@ fun VoiceResultDialog(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-
-                Spacer(modifier = Modifier.height(16.dp))
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -501,12 +548,9 @@ fun VoiceResultDialog(
                         text = result.message,
                         modifier = Modifier.padding(16.dp),
                         style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-
-                Spacer(modifier = Modifier.height(24.dp))
 
                 Button(
                     onClick = onDismiss,
@@ -519,33 +563,38 @@ fun VoiceResultDialog(
     }
 }
 
-// WaveAnimation компонент (используется в плеерах)
+// ✅ ДОПОЛНИТЕЛЬНЫЙ КОМПОНЕНТ: WaveAnimation для общего использования
 @Composable
 fun WaveAnimation() {
-    val infiniteTransition = rememberInfiniteTransition(label = "wave")
+    val infiniteTransition = rememberInfiniteTransition(label = "main_wave")
 
     Row(
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        repeat(3) { index ->
+        repeat(4) { index ->
             val animatedHeight by infiniteTransition.animateFloat(
-                initialValue = 0.3f,
+                initialValue = 0.2f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(600),
+                    animation = tween(800, easing = FastOutSlowInEasing),
                     repeatMode = RepeatMode.Reverse,
-                    initialStartOffset = StartOffset(index * 100)
+                    initialStartOffset = StartOffset(index * 120)
                 ),
-                label = "height$index"
+                label = "main_wave_height$index"
             )
 
             Box(
                 modifier = Modifier
-                    .width(3.dp)
-                    .height((20 * animatedHeight).dp)
+                    .width(4.dp)
+                    .height((24 * animatedHeight).dp)
                     .background(
-                        MaterialTheme.colorScheme.onPrimary,
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.secondary
+                            )
+                        ),
                         RoundedCornerShape(2.dp)
                     )
             )

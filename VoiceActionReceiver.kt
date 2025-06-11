@@ -3,13 +3,15 @@ package com.myradio.deepradio
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.util.Log
 import androidx.annotation.Keep
 import com.myradio.deepradio.domain.MediaManager
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @Keep
@@ -315,7 +317,7 @@ class VoiceActionReceiver : BroadcastReceiver() {
             val notification = androidx.core.app.NotificationCompat.Builder(context, "voice_response_channel")
                 .setContentTitle("Voice Command Response")
                 .setContentText(songInfo)
-                .setSmallIcon(R.drawable.logo)
+                .setSmallIcon(R.drawable.logo_16x16)
                 .setAutoCancel(true)
                 .setTimeoutAfter(5000) // Автоматически скрыть через 5 секунд
                 .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
